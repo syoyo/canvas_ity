@@ -136,8 +136,9 @@
 #ifndef CANVAS_ITY_HPP
 #define CANVAS_ITY_HPP
 
-#include <cstddef>
-#include <vector>
+//#include <cstddef>
+#include "nanocstddef.h"
+#include "nanovector.h"
 
 namespace canvas_ity
 {
@@ -160,19 +161,19 @@ struct xy { float x, y; xy(); xy( float, float ); };
 struct rgba { float r, g, b, a; rgba(); rgba( float, float, float, float ); };
 struct affine_matrix { float a, b, c, d, e, f; };
 struct paint_brush { enum types { color, linear, radial, pattern } type;
-                     std::vector< rgba > colors; std::vector< float > stops;
+                     nanostl::vector< rgba > colors; nanostl::vector< float > stops;
                      xy start, end; float start_radius, end_radius;
                      int width, height; repetition_style repetition; };
-struct font_face { std::vector< unsigned char > data;
+struct font_face { nanostl::vector< unsigned char > data;
                    int cmap, glyf, head, hhea, hmtx, loca, maxp, os_2;
                    float scale; };
-struct subpath_data { size_t count; bool closed; };
-struct bezier_path { std::vector< xy > points;
-                     std::vector< subpath_data > subpaths; };
-struct line_path { std::vector< xy > points;
-                   std::vector< subpath_data > subpaths; };
+struct subpath_data { nanostl::size_t count; bool closed; };
+struct bezier_path { nanostl::vector< xy > points;
+                     nanostl::vector< subpath_data > subpaths; };
+struct line_path { nanostl::vector< xy > points;
+                   nanostl::vector< subpath_data > subpaths; };
 struct pixel_run { unsigned short x, y; float delta; };
-typedef std::vector< pixel_run > pixel_runs;
+typedef nanostl::vector< pixel_run > pixel_runs;
 
 class canvas
 {
@@ -1155,10 +1156,10 @@ private:
     float global_alpha;
     rgba shadow_color;
     float shadow_blur;
-    std::vector< float > shadow;
+    nanostl::vector< float > shadow;
     float line_width;
     float miter_limit;
-    std::vector< float > line_dash;
+    nanostl::vector< float > line_dash;
     paint_brush fill_brush;
     paint_brush stroke_brush;
     paint_brush image_brush;
@@ -1179,7 +1180,7 @@ private:
     int character_to_glyph( char const *, int & );
     void text_to_lines( char const *, xy, float, bool );
     void dash_lines();
-    void add_half_stroke( size_t, size_t, bool );
+    void add_half_stroke( nanostl::size_t, nanostl::size_t, bool );
     void stroke_lines();
     void add_runs( xy, xy );
     void lines_to_runs( xy, int );
@@ -1213,9 +1214,9 @@ private:
 
 #ifdef CANVAS_ITY_IMPLEMENTATION
 
-#include <algorithm>
-#include <cmath>
-#include <numeric>
+#include "nanoalgorithm.h"
+#include "nanomath.h"
+//#include "nanolinumeric.h"
 
 namespace canvas_ity
 {
@@ -1241,11 +1242,11 @@ static xy const operator*( affine_matrix const &left, xy right ) {
 static float dot( xy left, xy right ) {
     return left.x * right.x + left.y * right.y; }
 static float length( xy that ) {
-    return sqrtf( dot( that, that ) ); }
+    return nanostl::sqrt( dot( that, that ) ); }
 static float direction( xy that ) {
-    return atan2f( that.y, that.x ); }
+    return nanostl::atan2( that.y, that.x ); }
 static xy const normalized( xy that ) {
-    return 1.0f / std::max( 1.0e-6f, length( that ) ) * that; }
+    return 1.0f / nanostl::max( 1.0e-6f, length( that ) ) * that; }
 static xy const perpendicular( xy that ) {
     return xy( -that.y, that.x ); }
 static xy const lerp( xy from, xy to, float ratio ) {
@@ -1272,7 +1273,7 @@ static rgba const operator*( float left, rgba right ) {
     return right *= left; }
 static float linearized( float value ) {
     return value < 0.04045f ? value / 12.92f :
-        powf( ( value + 0.055f ) / 1.055f, 2.4f ); }
+        nanostl::pow( ( value + 0.055f ) / 1.055f, 2.4f ); }
 static rgba const linearized( rgba that ) {
     return rgba( linearized( that.r ), linearized( that.g ),
                  linearized( that.b ), that.a ); }
@@ -1281,7 +1282,7 @@ static rgba const premultiplied( rgba that ) {
                  that.b * that.a, that.a ); }
 static float delinearized( float value ) {
     return value < 0.0031308f ? 12.92f * value :
-        1.055f * powf( value, 1.0f / 2.4f ) - 0.055f; }
+        1.055f * nanostl::pow( value, 1.0f / 2.4f ) - 0.055f; }
 static rgba const delinearized( rgba that ) {
     return rgba( delinearized( that.r ), delinearized( that.g ),
                  delinearized( that.b ), that.a ); }
@@ -1291,25 +1292,25 @@ static rgba const unpremultiplied( rgba that ) {
         rgba( 1.0f / that.a * that.r, 1.0f / that.a * that.g,
               1.0f / that.a * that.b, that.a ); }
 static rgba const clamped( rgba that ) {
-    return rgba( std::min( std::max( that.r, 0.0f ), 1.0f ),
-                 std::min( std::max( that.g, 0.0f ), 1.0f ),
-                 std::min( std::max( that.b, 0.0f ), 1.0f ),
-                 std::min( std::max( that.a, 0.0f ), 1.0f ) ); }
+    return rgba( nanostl::min( nanostl::max( that.r, 0.0f ), 1.0f ),
+                 nanostl::min( nanostl::max( that.g, 0.0f ), 1.0f ),
+                 nanostl::min( nanostl::max( that.b, 0.0f ), 1.0f ),
+                 nanostl::min( nanostl::max( that.a, 0.0f ), 1.0f ) ); }
 
 // Helpers for TTF file parsing
-static int unsigned_8( std::vector< unsigned char > &data, int index ) {
-    return data[ static_cast< size_t >( index ) ]; }
-static int signed_8( std::vector< unsigned char > &data, int index ) {
-    size_t place = static_cast< size_t >( index );
+static int unsigned_8( nanostl::vector< unsigned char > &data, int index ) {
+    return data[ static_cast< nanostl::size_t >( index ) ]; }
+static int signed_8( nanostl::vector< unsigned char > &data, int index ) {
+    nanostl::size_t place = static_cast< nanostl::size_t >( index );
     return static_cast< signed char >( data[ place ] ); }
-static int unsigned_16( std::vector< unsigned char > &data, int index ) {
-    size_t place = static_cast< size_t >( index );
+static int unsigned_16( nanostl::vector< unsigned char > &data, int index ) {
+    nanostl::size_t place = static_cast< nanostl::size_t >( index );
     return data[ place ] << 8 | data[ place + 1 ]; }
-static int signed_16( std::vector< unsigned char > &data, int index ) {
-    size_t place = static_cast< size_t >( index );
+static int signed_16( nanostl::vector< unsigned char > &data, int index ) {
+    nanostl::size_t place = static_cast< nanostl::size_t >( index );
     return static_cast< short >( data[ place ] << 8 | data[ place + 1 ] ); }
-static int signed_32( std::vector< unsigned char > &data, int index ) {
-    size_t place = static_cast< size_t >( index );
+static int signed_32( nanostl::vector< unsigned char > &data, int index ) {
+    nanostl::size_t place = static_cast< nanostl::size_t >( index );
     return ( data[ place + 0 ] << 24 | data[ place + 1 ] << 16 |
              data[ place + 2 ] <<  8 | data[ place + 3 ] <<  0 ); }
 
@@ -1346,22 +1347,22 @@ void canvas::add_tessellation(
     float squared_2 = dot( edge_2, edge_2 );
     float squared_3 = dot( edge_3, edge_3 );
     static float const epsilon = 1.0e-4f;
-    float length_squared = std::max( epsilon, dot( segment, segment ) );
+    float length_squared = nanostl::max( epsilon, dot( segment, segment ) );
     float projection_1 = dot( edge_1, segment ) / length_squared;
     float projection_2 = dot( edge_3, segment ) / length_squared;
-    float clamped_1 = std::min( std::max( projection_1, 0.0f ), 1.0f );
-    float clamped_2 = std::min( std::max( projection_2, 0.0f ), 1.0f );
+    float clamped_1 = nanostl::min( nanostl::max( projection_1, 0.0f ), 1.0f );
+    float clamped_2 = nanostl::min( nanostl::max( projection_2, 0.0f ), 1.0f );
     xy to_line_1 = point_1 + clamped_1 * segment - control_1;
     xy to_line_2 = point_2 - clamped_2 * segment - control_2;
     float cosine = 1.0f;
     if ( angular > -1.0f )
     {
         if ( squared_1 * squared_3 != 0.0f )
-            cosine = dot( edge_1, edge_3 ) / sqrtf( squared_1 * squared_3 );
+            cosine = dot( edge_1, edge_3 ) / nanostl::sqrt( squared_1 * squared_3 );
         else if ( squared_1 * squared_2 != 0.0f )
-            cosine = dot( edge_1, edge_2 ) / sqrtf( squared_1 * squared_2 );
+            cosine = dot( edge_1, edge_2 ) / nanostl::sqrt( squared_1 * squared_2 );
         else if ( squared_2 * squared_3 != 0.0f )
-            cosine = dot( edge_2, edge_3 ) / sqrtf( squared_2 * squared_3 );
+            cosine = dot( edge_2, edge_3 ) / nanostl::sqrt( squared_2 * squared_3 );
     }
     if ( ( dot( to_line_1, to_line_1 ) <= flatness &&
            dot( to_line_2, to_line_2 ) <= flatness &&
@@ -1417,43 +1418,43 @@ void canvas::add_bezier(
     xy extrema_b = 6.0f * ( point_1 + control_2 ) - 12.0f * control_1;
     xy extrema_c = 3.0f * edge_1;
     static float const epsilon = 1.0e-4f;
-    if ( fabsf( extrema_a.x ) > epsilon )
+    if ( nanostl::fabs( extrema_a.x ) > epsilon )
     {
         float discriminant =
             extrema_b.x * extrema_b.x - 4.0f * extrema_a.x * extrema_c.x;
         if ( discriminant >= 0.0f )
         {
             float sign = extrema_b.x > 0.0f ? 1.0f : -1.0f;
-            float term = -extrema_b.x - sign * sqrtf( discriminant );
+            float term = -extrema_b.x - sign * nanostl::sqrt( discriminant );
             float extremum_1 = term / ( 2.0f * extrema_a.x );
             at[ cuts++ ] = extremum_1;
             at[ cuts++ ] = extrema_c.x / ( extrema_a.x * extremum_1 );
         }
     }
-    else if ( fabsf( extrema_b.x ) > epsilon )
+    else if ( nanostl::fabs( extrema_b.x ) > epsilon )
         at[ cuts++ ] = -extrema_c.x / extrema_b.x;
-    if ( fabsf( extrema_a.y ) > epsilon )
+    if ( nanostl::fabs( extrema_a.y ) > epsilon )
     {
         float discriminant =
             extrema_b.y * extrema_b.y - 4.0f * extrema_a.y * extrema_c.y;
         if ( discriminant >= 0.0f )
         {
             float sign = extrema_b.y > 0.0f ? 1.0f : -1.0f;
-            float term = -extrema_b.y - sign * sqrtf( discriminant );
+            float term = -extrema_b.y - sign * nanostl::sqrt( discriminant );
             float extremum_1 = term / ( 2.0f * extrema_a.y );
             at[ cuts++ ] = extremum_1;
             at[ cuts++ ] = extrema_c.y / ( extrema_a.y * extremum_1 );
         }
     }
-    else if ( fabsf( extrema_b.y ) > epsilon )
+    else if ( nanostl::fabs( extrema_b.y ) > epsilon )
         at[ cuts++ ] = -extrema_c.y / extrema_b.y;
     float determinant_1 = dot( perpendicular( edge_1 ), edge_2 );
     float determinant_2 = dot( perpendicular( edge_1 ), edge_3 );
     float determinant_3 = dot( perpendicular( edge_2 ), edge_3 );
     float curve_a = determinant_1 - determinant_2 + determinant_3;
     float curve_b = -2.0f * determinant_1 + determinant_2;
-    if ( fabsf( curve_a ) > epsilon &&
-         fabsf( curve_b ) > epsilon )
+    if ( nanostl::fabs( curve_a ) > epsilon &&
+         nanostl::fabs( curve_b ) > epsilon )
         at[ cuts++ ] = -0.5f * curve_b / curve_a;
     for ( int index = 1; index < cuts; ++index )
     {
@@ -1496,16 +1497,16 @@ void canvas::path_to_lines(
     bool stroking )
 {
     static float const tolerance = 0.125f;
-    float ratio = tolerance / std::max( 0.5f * line_width, tolerance );
+    float ratio = tolerance / nanostl::max( 0.5f * line_width, tolerance );
     float angular = stroking ? ( ratio - 2.0f ) * ratio * 2.0f + 1.0f : -1.0f;
     lines.points.clear();
     lines.subpaths.clear();
-    size_t index = 0;
-    size_t ending = 0;
-    for ( size_t subpath = 0; subpath < path.subpaths.size(); ++subpath )
+    nanostl::size_t index = 0;
+    nanostl::size_t ending = 0;
+    for ( nanostl::size_t subpath = 0; subpath < path.subpaths.size(); ++subpath )
     {
         ending += path.subpaths[ subpath ].count;
-        size_t first = lines.points.size();
+        nanostl::size_t first = lines.points.size();
         xy point_1 = path.points[ index++ ];
         lines.points.push_back( point_1 );
         for ( ; index < ending; index += 3 )
@@ -1616,7 +1617,7 @@ void canvas::add_glyph(
         bool begin_on = false;
         xy end_point = xy( 0.0f, 0.0f );
         bool end_on = false;
-        size_t first = lines.points.size();
+        nanostl::size_t first = lines.points.size();
         for ( ; index <= ending; ++index )
         {
             if ( repeated )
@@ -1797,7 +1798,7 @@ void canvas::text_to_lines(
     bool stroking )
 {
     static float const tolerance = 0.125f;
-    float ratio = tolerance / std::max( 0.5f * line_width, tolerance );
+    float ratio = tolerance / nanostl::max( 0.5f * line_width, tolerance );
     float angular = stroking ? ( ratio - 2.0f ) * ratio * 2.0f + 1.0f : -1.0f;
     lines.points.clear();
     lines.subpaths.clear();
@@ -1805,7 +1806,7 @@ void canvas::text_to_lines(
         return;
     float width = maximum_width == 1.0e30f && text_align == leftward ? 0.0f :
         measure_text( text );
-    float reduction = maximum_width / std::max( maximum_width, width );
+    float reduction = maximum_width / nanostl::max( maximum_width, width );
     if ( text_align == rightward )
         position.x -= width * reduction;
     else if ( text_align == center )
@@ -1838,7 +1839,7 @@ void canvas::text_to_lines(
                    position.x + static_cast< float >( place ) * scaling.x,
                    position.y );
         add_glyph( glyph, angular );
-        int entry = std::min( glyph, hmetrics - 1 );
+        int entry = nanostl::min( glyph, hmetrics - 1 );
         place += unsigned_16( face.data, face.hmtx + entry * 4 );
     }
     forward = saved_forward;
@@ -1867,22 +1868,22 @@ void canvas::dash_lines()
     float offset = fmodf( line_dash_offset, total );
     if ( offset < 0.0f )
         offset += total;
-    size_t start = 0;
+    nanostl::size_t start = 0;
     while ( offset >= line_dash[ start ] )
     {
         offset -= line_dash[ start ];
         start = start + 1 < line_dash.size() ? start + 1 : 0;
     }
-    size_t ending = 0;
-    for ( size_t subpath = 0; subpath < scratch.subpaths.size(); ++subpath )
+    nanostl::size_t ending = 0;
+    for ( nanostl::size_t subpath = 0; subpath < scratch.subpaths.size(); ++subpath )
     {
-        size_t index = ending;
+        nanostl::size_t index = ending;
         ending += scratch.subpaths[ subpath ].count;
-        size_t first = lines.points.size();
-        size_t segment = start;
+        nanostl::size_t first = lines.points.size();
+        nanostl::size_t segment = start;
         bool emit = ~start & 1;
-        size_t merge_point = lines.points.size();
-        size_t merge_subpath = lines.subpaths.size();
+        nanostl::size_t merge_point = lines.points.size();
+        nanostl::size_t merge_subpath = lines.subpaths.size();
         bool merge_emit = emit;
         float next = line_dash[ start ] - offset;
         for ( ; index + 1 < ending; ++index )
@@ -1919,7 +1920,7 @@ void canvas::dash_lines()
                     lines.subpaths.back().closed = true;
                 else
                 {
-                    size_t count = lines.subpaths.back().count;
+                    nanostl::size_t count = lines.subpaths.back().count;
                     std::rotate( ( lines.points.begin() +
                                    static_cast< ptrdiff_t >( merge_point ) ),
                                  ( lines.points.end() -
@@ -1947,8 +1948,8 @@ void canvas::dash_lines()
 // the inspiration for these extra windings.
 //
 void canvas::add_half_stroke(
-    size_t beginning,
-    size_t ending,
+    nanostl::size_t beginning,
+    nanostl::size_t ending,
     bool closed )
 {
     float half = line_width * 0.5f;
@@ -1956,8 +1957,8 @@ void canvas::add_half_stroke(
     xy in_direction = xy( 0.0f, 0.0f );
     float in_length = 0.0f;
     xy point = inverse * scratch.points[ beginning ];
-    size_t finish = beginning;
-    size_t index = beginning;
+    nanostl::size_t finish = beginning;
+    nanostl::size_t index = beginning;
     do
     {
         xy next = inverse * scratch.points[ index ];
@@ -1971,7 +1972,7 @@ void canvas::add_half_stroke(
             xy side_in = point + half * perpendicular( in_direction );
             xy side_out = point + half * perpendicular( out_direction );
             float turn = dot( perpendicular( in_direction ), out_direction );
-            if ( fabsf( turn ) < epsilon )
+            if ( nanostl::fabs( turn ) < epsilon )
                 turn = 0.0f;
             xy offset = turn == 0.0f ? xy( 0.0f, 0.0f ) :
                 half / turn * ( out_direction - in_direction );
@@ -1979,8 +1980,8 @@ void canvas::add_half_stroke(
                            dot( offset, out_direction ) > out_length );
             if ( turn > 0.0f && tight )
             {
-                std::swap( side_in, side_out );
-                std::swap( in_direction, out_direction );
+                nanostl::swap( side_in, side_out );
+                nanostl::swap( in_direction, out_direction );
                 lines.points.push_back( forward * side_out );
                 lines.points.push_back( forward * point );
                 lines.points.push_back( forward * side_in );
@@ -1993,7 +1994,7 @@ void canvas::add_half_stroke(
             {
                 float cosine = dot( in_direction, out_direction );
                 float angle = acosf(
-                    std::min( std::max( cosine, -1.0f ), 1.0f ) );
+                    nanostl::min( nanostl::max( cosine, -1.0f ), 1.0f ) );
                 float alpha = 4.0f / 3.0f * tanf( 0.25f * angle );
                 lines.points.push_back( forward * side_in );
                 add_bezier(
@@ -2013,7 +2014,7 @@ void canvas::add_half_stroke(
                 lines.points.push_back( forward * side_out );
                 lines.points.push_back( forward * point );
                 lines.points.push_back( forward * side_in );
-                std::swap( in_direction, out_direction );
+                nanostl::swap( in_direction, out_direction );
             }
         }
         if ( out_length >= epsilon )
@@ -2076,14 +2077,14 @@ void canvas::stroke_lines()
     lines.points.clear();
     lines.subpaths.swap( scratch.subpaths );
     lines.subpaths.clear();
-    size_t ending = 0;
-    for ( size_t subpath = 0; subpath < scratch.subpaths.size(); ++subpath )
+    nanostl::size_t ending = 0;
+    for ( nanostl::size_t subpath = 0; subpath < scratch.subpaths.size(); ++subpath )
     {
-        size_t beginning = ending;
+        nanostl::size_t beginning = ending;
         ending += scratch.subpaths[ subpath ].count;
         if ( ending - beginning < 2 )
             continue;
-        size_t first = lines.points.size();
+        nanostl::size_t first = lines.points.size();
         add_half_stroke( beginning, ending - 1,
                          scratch.subpaths[ subpath ].closed );
         if ( scratch.subpaths[ subpath ].closed )
@@ -2111,11 +2112,11 @@ void canvas::add_runs(
     xy to )
 {
     static float const epsilon = 2.0e-5f;
-    if ( fabsf( to.y - from.y ) < epsilon)
+    if ( nanostl::fabs( to.y - from.y ) < epsilon)
         return;
     float sign = to.y > from.y ? 1.0f : -1.0f;
     if ( from.x > to.x )
-        std::swap( from, to );
+        nanostl::swap( from, to );
     xy now = from;
     xy pixel = xy( floorf( now.x ), floorf( now.y ) );
     xy corner = pixel + xy( 1.0f, to.y > from.y ? 1.0f : 0.0f );
@@ -2133,7 +2134,7 @@ void canvas::add_runs(
         float carry = 0.0f;
         while ( next_x.x < next_y.x )
         {
-            float strip = std::min( std::max( ( next_x.y - now.y ) * y_step,
+            float strip = nanostl::min( nanostl::max( ( next_x.y - now.y ) * y_step,
                                               0.0f ), 1.0f );
             float mid = ( next_x.x + now.x ) * 0.5f;
             float area = ( mid - pixel.x ) * strip;
@@ -2147,7 +2148,7 @@ void canvas::add_runs(
             next_x.y = ( next_x.x - from.x ) * slope.y + from.y;
             pixel.x += 1.0f;
         }
-        float strip = std::min( std::max( ( next_y.y - now.y ) * y_step,
+        float strip = nanostl::min( nanostl::max( ( next_y.y - now.y ) * y_step,
                                           0.0f ), 1.0f );
         float mid = ( next_y.x + now.x ) * 0.5f;
         float area = ( mid - pixel.x ) * strip;
@@ -2177,7 +2178,7 @@ static bool operator<(
              left.y > right.y ? false :
              left.x < right.x ? true :
              left.x > right.x ? false :
-             fabsf( left.delta ) < fabsf( right.delta ) );
+             nanostl::fabs( left.delta ) < nanostl::fabs( right.delta ) );
 }
 
 // Scan-convert the polylines to prepare them for antialiased rendering.
@@ -2197,21 +2198,21 @@ void canvas::lines_to_runs(
     runs.clear();
     float width = static_cast< float >( size_x + padding );
     float height = static_cast< float >( size_y + padding );
-    size_t ending = 0;
-    for ( size_t subpath = 0; subpath < lines.subpaths.size(); ++subpath )
+    nanostl::size_t ending = 0;
+    for ( nanostl::size_t subpath = 0; subpath < lines.subpaths.size(); ++subpath )
     {
-        size_t beginning = ending;
+        nanostl::size_t beginning = ending;
         ending += lines.subpaths[ subpath ].count;
         scratch.points.clear();
-        for ( size_t index = beginning; index < ending; ++index )
+        for ( nanostl::size_t index = beginning; index < ending; ++index )
             scratch.points.push_back( offset + lines.points[ index ] );
         for ( int edge = 0; edge < 4; ++edge )
         {
             xy normal = xy( edge == 0 ? 1.0f : edge == 2 ? -1.0f : 0.0f,
                             edge == 1 ? 1.0f : edge == 3 ? -1.0f : 0.0f );
             float place = edge == 2 ? width : edge == 3 ? height : 0.0f;
-            size_t first = scratch.points.size();
-            for ( size_t index = 0; index < first; ++index )
+            nanostl::size_t first = scratch.points.size();
+            for ( nanostl::size_t index = 0; index < first; ++index )
             {
                 xy from = scratch.points[ ( index ? index : first ) - 1 ];
                 xy to = scratch.points[ index ];
@@ -2227,22 +2228,22 @@ void canvas::lines_to_runs(
                 scratch.points.begin(),
                 scratch.points.begin() + static_cast< ptrdiff_t >( first ) );
         }
-        size_t last = scratch.points.size();
-        for ( size_t index = 0; index < last; ++index )
+        nanostl::size_t last = scratch.points.size();
+        for ( nanostl::size_t index = 0; index < last; ++index )
         {
             xy from = scratch.points[ ( index ? index : last ) - 1 ];
             xy to = scratch.points[ index ];
-            add_runs( xy( std::min( std::max( from.x, 0.0f ), width ),
-                          std::min( std::max( from.y, 0.0f ), height ) ),
-                      xy( std::min( std::max( to.x, 0.0f ), width ),
-                          std::min( std::max( to.y, 0.0f ), height ) ) );
+            add_runs( xy( nanostl::min( nanostl::max( from.x, 0.0f ), width ),
+                          nanostl::min( nanostl::max( from.y, 0.0f ), height ) ),
+                      xy( nanostl::min( nanostl::max( to.x, 0.0f ), width ),
+                          nanostl::min( nanostl::max( to.y, 0.0f ), height ) ) );
         }
     }
     if ( runs.empty() )
         return;
     std::sort( runs.begin(), runs.end() );
-    size_t to = 0;
-    for ( size_t from = 1; from < runs.size(); ++from )
+    nanostl::size_t to = 0;
+    for ( nanostl::size_t from = 1; from < runs.size(); ++from )
         if ( runs[ from ].x == runs[ to ].x &&
              runs[ from ].y == runs[ to ].y )
             runs[ to ].delta += runs[ from ].delta;
@@ -2280,10 +2281,10 @@ rgba canvas::paint_pixel(
              ( ( brush.repetition & 1 ) &&
                ( point.y < 0.0f || height <= point.y ) ) )
             return rgba( 0.0f, 0.0f, 0.0f, 0.0f );
-        float scale_x = fabsf( inverse.a ) + fabsf( inverse.c );
-        float scale_y = fabsf( inverse.b ) + fabsf( inverse.d );
-        scale_x = std::max( 1.0f, std::min( scale_x, width * 0.25f ) );
-        scale_y = std::max( 1.0f, std::min( scale_y, height * 0.25f ) );
+        float scale_x = nanostl::fabs( inverse.a ) + nanostl::fabs( inverse.c );
+        float scale_y = nanostl::fabs( inverse.b ) + nanostl::fabs( inverse.d );
+        scale_x = nanostl::max( 1.0f, nanostl::min( scale_x, width * 0.25f ) );
+        scale_y = nanostl::max( 1.0f, nanostl::min( scale_y, height * 0.25f ) );
         float reciprocal_x = 1.0f / scale_x;
         float reciprocal_y = 1.0f / scale_y;
         point -= xy( 0.5f, 0.5f );
@@ -2295,7 +2296,7 @@ rgba canvas::paint_pixel(
         float total_weight = 0.0f;
         for ( int pattern_y = top; pattern_y < bottom; ++pattern_y )
         {
-            float y = fabsf( reciprocal_y *
+            float y = nanostl::fabs( reciprocal_y *
                 ( static_cast< float >( pattern_y ) - point.y ) );
             float weight_y = ( y < 1.0f ?
                 (    1.5f * y - 2.5f ) * y          * y + 1.0f :
@@ -2304,11 +2305,11 @@ rgba canvas::paint_pixel(
             if ( wrapped_y < 0 )
                 wrapped_y += brush.height;
             if ( &brush == &image_brush )
-                wrapped_y = std::min( std::max( pattern_y, 0 ),
+                wrapped_y = nanostl::min( nanostl::max( pattern_y, 0 ),
                                       brush.height - 1 );
             for ( int pattern_x = left; pattern_x < right; ++pattern_x )
             {
-                float x = fabsf( reciprocal_x *
+                float x = nanostl::fabs( reciprocal_x *
                     ( static_cast< float >( pattern_x ) - point.x ) );
                 float weight_x = ( x < 1.0f ?
                     (    1.5f * x - 2.5f ) * x          * x + 1.0f :
@@ -2317,10 +2318,10 @@ rgba canvas::paint_pixel(
                 if ( wrapped_x < 0 )
                     wrapped_x += brush.width;
                 if ( &brush == &image_brush )
-                    wrapped_x = std::min( std::max( pattern_x, 0 ),
+                    wrapped_x = nanostl::min( nanostl::max( pattern_x, 0 ),
                                           brush.width - 1 );
                 float weight = weight_x * weight_y;
-                size_t index = static_cast< size_t >(
+                nanostl::size_t index = static_cast< nanostl::size_t >(
                     wrapped_y * brush.width + wrapped_x );
                 total_color += weight * brush.colors[ index ];
                 total_weight += weight;
@@ -2350,7 +2351,7 @@ rgba canvas::paint_pixel(
         if ( discriminant < 0.0f ||
              ( span == 0.0f && change == 0.0f ) )
             return rgba( 0.0f, 0.0f, 0.0f, 0.0f );
-        float root = sqrtf( discriminant );
+        float root = nanostl::sqrt( discriminant );
         float reciprocal = 1.0f / ( 2.0f * a );
         float offset_1 = ( -b - root ) * reciprocal;
         float offset_2 = ( -b + root ) * reciprocal;
@@ -2363,7 +2364,7 @@ rgba canvas::paint_pixel(
         else
             return rgba( 0.0f, 0.0f, 0.0f, 0.0f );
     }
-    size_t index = static_cast< size_t >(
+    nanostl::size_t index = static_cast< nanostl::size_t >(
         std::upper_bound( brush.stops.begin(), brush.stops.end(), offset ) -
         brush.stops.begin() );
     if ( index == 0 )
@@ -2400,8 +2401,8 @@ void canvas::render_shadow(
                                      shadow_offset_y == 0.0f ) )
         return;
     float sigma_squared = 0.25f * shadow_blur * shadow_blur;
-    size_t radius = static_cast< size_t >(
-        0.5f * sqrtf( 4.0f * sigma_squared + 1.0f ) - 0.5f );
+    nanostl::size_t radius = static_cast< nanostl::size_t >(
+        0.5f * nanostl::sqrt( 4.0f * sigma_squared + 1.0f ) - 0.5f );
     int border = 3 * ( static_cast< int >( radius ) + 1 );
     xy offset = xy( static_cast< float >( border ) + shadow_offset_x,
                     static_cast< float >( border ) + shadow_offset_y );
@@ -2410,36 +2411,36 @@ void canvas::render_shadow(
     int right = 0;
     int top = size_y + 2 * border;
     int bottom = 0;
-    for ( size_t index = 0; index < runs.size(); ++index )
+    for ( nanostl::size_t index = 0; index < runs.size(); ++index )
     {
-        left = std::min( left, static_cast< int >( runs[ index ].x ) );
-        right = std::max( right, static_cast< int >( runs[ index ].x ) );
-        top = std::min( top, static_cast< int >( runs[ index ].y ) );
-        bottom = std::max( bottom, static_cast< int >( runs[ index ].y ) );
+        left = nanostl::min( left, static_cast< int >( runs[ index ].x ) );
+        right = nanostl::max( right, static_cast< int >( runs[ index ].x ) );
+        top = nanostl::min( top, static_cast< int >( runs[ index ].y ) );
+        bottom = nanostl::max( bottom, static_cast< int >( runs[ index ].y ) );
     }
-    left = std::max( left - border, 0 );
-    right = std::min( right + border, size_x + 2 * border ) + 1;
-    top = std::max( top - border, 0 );
-    bottom = std::min( bottom + border, size_y + 2 * border );
-    size_t width = static_cast< size_t >( std::max( right - left, 0 ) );
-    size_t height = static_cast< size_t >( std::max( bottom - top, 0 ) );
-    size_t working = width * height;
+    left = nanostl::max( left - border, 0 );
+    right = nanostl::min( right + border, size_x + 2 * border ) + 1;
+    top = nanostl::max( top - border, 0 );
+    bottom = nanostl::min( bottom + border, size_y + 2 * border );
+    nanostl::size_t width = static_cast< nanostl::size_t >( nanostl::max( right - left, 0 ) );
+    nanostl::size_t height = static_cast< nanostl::size_t >( nanostl::max( bottom - top, 0 ) );
+    nanostl::size_t working = width * height;
     shadow.clear();
-    shadow.resize( working + std::max( width, height ) );
+    shadow.resize( working + nanostl::max( width, height ) );
     static float const threshold = 1.0f / 8160.0f;
     {
         int x = -1;
         int y = -1;
         float sum = 0.0f;
-        for ( size_t index = 0; index < runs.size(); ++index )
+        for ( nanostl::size_t index = 0; index < runs.size(); ++index )
         {
             pixel_run next = runs[ index ];
-            float coverage = std::min( fabsf( sum ), 1.0f );
+            float coverage = nanostl::min( nanostl::fabs( sum ), 1.0f );
             int to = next.y == y ? next.x : x + 1;
             if ( coverage >= threshold )
                 for ( ; x < to; ++x )
-                    shadow[ static_cast< size_t >( y - top ) * width +
-                            static_cast< size_t >( x - left ) ] = coverage *
+                    shadow[ static_cast< nanostl::size_t >( y - top ) * width +
+                            static_cast< nanostl::size_t >( x - left ) ] = coverage *
                         paint_pixel( xy( static_cast< float >( x ) + 0.5f,
                                          static_cast< float >( y ) + 0.5f ) -
                                      offset, brush ).a;
@@ -2457,16 +2458,16 @@ void canvas::render_shadow(
     float divisor = 2.0f * ( alpha + static_cast< float >( radius ) ) + 1.0f;
     float weight_1 = alpha / divisor;
     float weight_2 = ( 1.0f - alpha ) / divisor;
-    for ( size_t y = 0; y < height; ++y )
+    for ( nanostl::size_t y = 0; y < height; ++y )
         for ( int pass = 0; pass < 3; ++pass )
         {
-            for ( size_t x = 0; x < width; ++x )
+            for ( nanostl::size_t x = 0; x < width; ++x )
                 shadow[ working + x ] = shadow[ y * width + x ];
             float running = weight_1 * shadow[ working + radius + 1 ];
-            for ( size_t x = 0; x <= radius; ++x )
+            for ( nanostl::size_t x = 0; x <= radius; ++x )
                 running += ( weight_1 + weight_2 ) * shadow[ working + x ];
             shadow[ y * width ] = running;
-            for ( size_t x = 1; x < width; ++x )
+            for ( nanostl::size_t x = 1; x < width; ++x )
             {
                 if ( x >= radius + 1 )
                     running -= weight_2 * shadow[ working + x - radius - 1 ];
@@ -2479,16 +2480,16 @@ void canvas::render_shadow(
                 shadow[ y * width + x ] = running;
             }
         }
-    for ( size_t x = 0; x < width; ++x )
+    for ( nanostl::size_t x = 0; x < width; ++x )
         for ( int pass = 0; pass < 3; ++pass )
         {
-            for ( size_t y = 0; y < height; ++y )
+            for ( nanostl::size_t y = 0; y < height; ++y )
                 shadow[ working + y ] = shadow[ y * width + x ];
             float running = weight_1 * shadow[ working + radius + 1 ];
-            for ( size_t y = 0; y <= radius; ++y )
+            for ( nanostl::size_t y = 0; y <= radius; ++y )
                 running += ( weight_1 + weight_2 ) * shadow[ working + y ];
             shadow[ x ] = running;
-            for ( size_t y = 1; y < height; ++y )
+            for ( nanostl::size_t y = 1; y < height; ++y )
             {
                 if ( y >= radius + 1 )
                     running -= weight_2 * shadow[ working + y - radius - 1 ];
@@ -2505,11 +2506,11 @@ void canvas::render_shadow(
     int x = -1;
     int y = -1;
     float sum = 0.0f;
-    for ( size_t index = 0; index < mask.size(); ++index )
+    for ( nanostl::size_t index = 0; index < mask.size(); ++index )
     {
         pixel_run next = mask[ index ];
-        float visibility = std::min( fabsf( sum ), 1.0f );
-        int to = std::min( next.y == y ? next.x : x + 1, right - border );
+        float visibility = nanostl::min( nanostl::fabs( sum ), 1.0f );
+        int to = nanostl::min( next.y == y ? next.x : x + 1, right - border );
         if ( visibility >= threshold &&
              top <= y + border && y + border < bottom )
             for ( ; x < to; ++x )
@@ -2517,8 +2518,8 @@ void canvas::render_shadow(
                 rgba &back = bitmap[ y * size_x + x ];
                 rgba fore = global_alpha *
                     shadow[
-                        static_cast< size_t >( y + border - top ) * width +
-                        static_cast< size_t >( x + border - left ) ] *
+                        static_cast< nanostl::size_t >( y + border - top ) * width +
+                        static_cast< nanostl::size_t >( x + border - left ) ] *
                     shadow_color;
                 float mix_fore = operation & 1 ? back.a : 0.0f;
                 if ( operation & 2 )
@@ -2527,12 +2528,12 @@ void canvas::render_shadow(
                 if ( operation & 8 )
                     mix_back = 1.0f - mix_back;
                 rgba blend = mix_fore * fore + mix_back * back;
-                blend.a = std::min( blend.a, 1.0f );
+                blend.a = nanostl::min( blend.a, 1.0f );
                 back = visibility * blend + ( 1.0f - visibility ) * back;
             }
         if ( next.y != y )
             sum = 0.0f;
-        x = std::max( static_cast< int >( next.x ), left - border );
+        x = nanostl::max( static_cast< int >( next.x ), left - border );
         y = next.y;
         sum += next.delta;
     }
@@ -2560,15 +2561,15 @@ void canvas::render_main(
     int y = -1;
     float path_sum = 0.0f;
     float clip_sum = 0.0f;
-    size_t path_index = 0;
-    size_t clip_index = 0;
+    nanostl::size_t path_index = 0;
+    nanostl::size_t clip_index = 0;
     while ( clip_index < mask.size() )
     {
         bool which = ( path_index < runs.size() &&
                        runs[ path_index ] < mask[ clip_index ] );
         pixel_run next = which ? runs[ path_index ] : mask[ clip_index ];
-        float coverage = std::min( fabsf( path_sum ), 1.0f );
-        float visibility = std::min( fabsf( clip_sum ), 1.0f );
+        float coverage = nanostl::min( nanostl::fabs( path_sum ), 1.0f );
+        float visibility = nanostl::min( nanostl::fabs( clip_sum ), 1.0f );
         int to = next.y == y ? next.x : x + 1;
         static float const threshold = 1.0f / 8160.0f;
         if ( ( coverage >= threshold || ~operation & 8 ) &&
@@ -2587,7 +2588,7 @@ void canvas::render_main(
                 if ( operation & 8 )
                     mix_back = 1.0f - mix_back;
                 rgba blend = mix_fore * fore + mix_back * back;
-                blend.a = std::min( blend.a, 1.0f );
+                blend.a = nanostl::min( blend.a, 1.0f );
                 back = visibility * blend + ( 1.0f - visibility ) * back;
             }
         x = next.x;
@@ -2971,7 +2972,7 @@ void canvas::arc_to(
     xy point_2 = xy( x, y );
     xy edge_1 = normalized( point_1 - vertex );
     xy edge_2 = normalized( point_2 - vertex );
-    float sine = fabsf( dot( perpendicular( edge_1 ), edge_2 ) );
+    float sine = nanostl::fabs( dot( perpendicular( edge_1 ), edge_2 ) );
     static float const epsilon = 1.0e-4f;
     if ( sine < epsilon )
     {
@@ -3010,7 +3011,7 @@ void canvas::arc(
     if ( span == 0.0f )
         return;
     int steps = static_cast< int >(
-        std::max( 1.0f, roundf( 16.0f / tau * span * winding ) ) );
+        nanostl::max( 1.0f, roundf( 16.0f / tau * span * winding ) ) );
     float segment = span / static_cast< float >( steps );
     float alpha = 4.0f / 3.0f * tanf( 0.25f * segment );
     for ( int step = 0; step < steps; ++step )
@@ -3058,15 +3059,15 @@ void canvas::clip()
 {
     path_to_lines( false );
     lines_to_runs( xy( 0.0f, 0.0f ), 0 );
-    size_t part = runs.size();
+    nanostl::size_t part = runs.size();
     runs.insert( runs.end(), mask.begin(), mask.end() );
     mask.clear();
     int y = -1;
     float last = 0.0f;
     float sum_1 = 0.0f;
     float sum_2 = 0.0f;
-    size_t index_1 = 0;
-    size_t index_2 = part;
+    nanostl::size_t index_1 = 0;
+    nanostl::size_t index_2 = part;
     while ( index_1 < part && index_2 < runs.size() )
     {
         bool which = runs[ index_1 ] < runs[ index_2 ];
@@ -3082,8 +3083,8 @@ void canvas::clip()
             sum_1 += runs[ index_1++ ].delta;
         else
             sum_2 += runs[ index_2++ ].delta;
-        float visibility = ( std::min( fabsf( sum_1 ), 1.0f ) *
-                             std::min( fabsf( sum_2 ), 1.0f ) );
+        float visibility = ( nanostl::min( nanostl::fabs( sum_1 ), 1.0f ) *
+                             nanostl::min( nanostl::fabs( sum_2 ), 1.0f ) );
         if ( visibility == last )
             continue;
         if ( !mask.empty() &&
@@ -3104,10 +3105,10 @@ bool canvas::is_point_in_path(
 {
     path_to_lines( false );
     int winding = 0;
-    size_t subpath = 0;
-    size_t beginning = 0;
-    size_t ending = 0;
-    for ( size_t index = 0; index < lines.points.size(); ++index )
+    nanostl::size_t subpath = 0;
+    nanostl::size_t beginning = 0;
+    nanostl::size_t ending = 0;
+    for ( nanostl::size_t index = 0; index < lines.points.size(); ++index )
     {
         while ( index >= ending )
         {
@@ -3304,7 +3305,7 @@ float canvas::measure_text(
     for ( int index = 0; text[ index ]; )
     {
         int glyph = character_to_glyph( text, index );
-        int entry = std::min( glyph, hmetrics - 1 );
+        int entry = nanostl::min( glyph, hmetrics - 1 );
         width += unsigned_16( face.data, face.hmtx + entry * 4 );
     }
     return static_cast< float >( width ) * face.scale;
@@ -3323,9 +3324,9 @@ void canvas::draw_image(
     if ( !image || width <= 0 || height <= 0 ||
          to_width == 0.0f || to_height == 0.0f )
         return;
-    std::swap( fill_brush, image_brush );
+    nanostl::swap( fill_brush, image_brush );
     set_pattern( fill_style, image, width, height, stride, repeat );
-    std::swap( fill_brush, image_brush );
+    nanostl::swap( fill_brush, image_brush );
     lines.points.clear();
     lines.subpaths.clear();
     lines.points.push_back( forward * xy( x, y ) );
@@ -3336,10 +3337,10 @@ void canvas::draw_image(
     lines.subpaths.push_back( entry );
     affine_matrix saved_forward = forward;
     affine_matrix saved_inverse = inverse;
-    translate( x + std::min( 0.0f, to_width ),
-               y + std::min( 0.0f, to_height ) );
-    scale( fabsf( to_width ) / static_cast< float >( width ),
-           fabsf( to_height ) / static_cast< float >( height ) );
+    translate( x + nanostl::min( 0.0f, to_width ),
+               y + nanostl::min( 0.0f, to_height ) );
+    scale( nanostl::fabs( to_width ) / static_cast< float >( width ),
+           nanostl::fabs( to_height ) / static_cast< float >( height ) );
     render_main( image_brush );
     forward = saved_forward;
     inverse = saved_inverse;
